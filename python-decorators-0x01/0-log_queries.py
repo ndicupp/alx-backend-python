@@ -76,7 +76,6 @@ Returns the result unchanged
 
 When you run this code, it will output:
 Executing SQL Query: SELECT * FROM users
-The decorator can be easily modified to log to a file, add timestamps, or include additional information if needed.
 
 
 
