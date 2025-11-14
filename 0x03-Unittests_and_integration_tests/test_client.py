@@ -156,6 +156,53 @@ class Thing:
     def foo_two(self):
         print(value)
 
+    @patch("client.get_json")
+    def test_public_repos(self, mock_get_json):
+        """Unit-test GithubOrgClient.public_repos"""
+
+        # Mock payload returned by get_json
+        mock_get_json.return_value = [
+            {"name": "repo1"},
+            {"name": "repo2"},
+            {"name": "repo3"},
+        ]
+
+        # Expected final repo list
+        expected_repos = ["repo1", "repo2", "repo3"]
+
+        # Mock _public_repos_url to return a fake URL
+        with patch.object(GithubOrgClient, "_public_repos_url", new_callable=property) as mock_url:
+            mock_url.return_value = "https://api.github.com/orgs/testorg/repos"
+
+            client = GithubOrgClient("testorg")
+            repos = client.public_repos()
+
+            # Assertions
+            self.assertEqual(repos, expected_repos)
+
+            # Ensure _public_repos_url property was accessed exactly once
+            mock_url.assert_called_once()
+
+            # Ensure get_json was called exactly once with the fake URL
+            mock_get_json.assert_called_once_with("https://api.github.com/orgs/testorg/repos")
+Explanation
+✔ Mock get_json via decorator
+
+@patch("client.get_json") ensures no actual HTTP calls happen and we fully control returned API data.
+
+✔ Mock _public_repos_url using a context manager
+
+You must patch it as a property, because in the implementation it is typically used as:
+self._public_repos_url
+so we use
+patch.object(GithubOrgClient, "_public_repos_url", new_callable=property)
+
+Only repo names are returned
+
+Since public_repos() extracts "name", the output becomes:
+["repo1", "repo2", "repo3"]
+
+
 
 Thing().foo_one()
 
