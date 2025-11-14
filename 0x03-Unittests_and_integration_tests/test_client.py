@@ -84,3 +84,82 @@ The return value is ** forwarded correctly** from the mock value
 
 Because get_json is fully mocked.
 
+python
+class MyClass:
+    @property
+    def last_transaction(self):
+        # an expensive and complicated DB query here
+        pass
+In the test suite:
+
+python
+def test():
+    # Make sure you patch on MyClass, not on a MyClass instance, otherwise
+    # you'll get an AttributeError, because mock is using settattr and
+    # last_transaction is a readonly property so there's no setter.
+    with mock.patch(MyClass, 'last_transaction') as mock_last_transaction:
+        mock_last_transaction.__get__ = mock.Mock(return_value=Transaction())
+        myclass = MyClass()
+        print myclass.last_transaction
+
+@patch('__main__.SomeClass')
+def function(normal_argument, mock_class):
+    print(mock_class is SomeClass)
+
+function(None)
+class Class:
+    def method(self):
+        pass
+
+with patch('__main__.Class') as MockClass:
+    instance = MockClass.return_value
+    instance.method.return_value = 'foo'
+    assert Class() is instance
+    assert Class().method() == 'foo'
+
+    Original = Class
+patcher = patch('__main__.Class', spec=True)
+MockClass = patcher.start()
+instance = MockClass()
+assert isinstance(instance, Original)
+patcher.stop()
+
+foo = {}
+with patch.dict(foo, {'newkey': 'newvalue'}) as patched_foo:
+    assert foo == {'newkey': 'newvalue'}
+    assert patched_foo == {'newkey': 'newvalue'}
+    # You can add, update or delete keys of foo (or patched_foo, it's the same dict)
+    patched_foo['spam'] = 'eggs'
+
+assert foo == {}
+assert patched_foo == {}
+import os
+with patch.dict('os.environ', {'newkey': 'newvalue'}):
+    print(os.environ['newkey'])
+
+
+assert 'newkey' not in os.environ
+mymodule = MagicMock()
+mymodule.function.return_value = 'fish'
+with patch.dict('sys.modules', mymodule=mymodule):
+    import mymodule
+    mymodule.function('some', 'args')
+
+
+    patch.TEST_PREFIX = 'foo'
+value = 3
+
+@patch('__main__.value', 'not three')
+class Thing:
+    def foo_one(self):
+        print(value)
+    def foo_two(self):
+        print(value)
+
+
+Thing().foo_one()
+
+Thing().foo_two()
+
+value
+
