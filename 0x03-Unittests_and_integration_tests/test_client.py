@@ -202,11 +202,116 @@ Only repo names are returned
 Since public_repos() extracts "name", the output becomes:
 ["repo1", "repo2", "repo3"]
 
+# test_math.py
+from nose.tools import assert_equal
+from parameterized import parameterized, parameterized_class
 
+import unittest
+import math
 
-Thing().foo_one()
+@parameterized([
+    (2, 2, 4),
+    (2, 3, 8),
+    (1, 9, 1),
+    (0, 9, 0),
+])
+def test_pow(base, exponent, expected):
+   assert_equal(math.pow(base, exponent), expected)
 
-Thing().foo_two()
+class TestMathUnitTest(unittest.TestCase):
+   @parameterized.expand([
+       ("negative", -1.5, -2.0),
+       ("integer", 1, 1.0),
+       ("large fraction", 1.6, 1),
+   ])
+   def test_floor(self, name, input, expected):
+       assert_equal(math.floor(input), expected)
 
-value
+@parameterized_class(('a', 'b', 'expected_sum', 'expected_product'), [
+   (1, 2, 3, 2),
+   (5, 5, 10, 25),
+])
+class TestMathClass(unittest.TestCase):
+   def test_add(self):
+      assert_equal(self.a + self.b, self.expected_sum)
+
+   def test_multiply(self):
+      assert_equal(self.a * self.b, self.expected_product)
+
+@parameterized_class([
+   { "a": 3, "expected": 2 },
+   { "b": 5, "expected": -4 },
+])
+class TestMathClassDict(unittest.TestCase):
+   a = 1
+   b = 1
+
+   def test_subtract(self):
+      assert_equal(self.a - self.b, self.expected)
+With nose (and nose2):
+
+$ nosetests -v test_math.py
+test_floor_0_negative (test_math.TestMathUnitTest) ... ok
+test_floor_1_integer (test_math.TestMathUnitTest) ... ok
+test_floor_2_large_fraction (test_math.TestMathUnitTest) ... ok
+test_math.test_pow(2, 2, 4, {}) ... ok
+test_math.test_pow(2, 3, 8, {}) ... ok
+test_math.test_pow(1, 9, 1, {}) ... ok
+test_math.test_pow(0, 9, 0, {}) ... ok
+test_add (test_math.TestMathClass_0) ... ok
+test_multiply (test_math.TestMathClass_0) ... ok
+test_add (test_math.TestMathClass_1) ... ok
+test_multiply (test_math.TestMathClass_1) ... ok
+test_subtract (test_math.TestMathClassDict_0) ... ok
+
+Ran 12 tests in 0.015s
+
+from parameterized import parameterized
+
+    @parameterized.expand([
+        ({"license": {"key": "my_license"}}, "my_license", True),
+        ({"license": {"key": "other_license"}}, "my_license", False),
+    ])
+    def test_has_license(self, repo, license_key, expected):
+        """Unit-test GithubOrgClient.has_license"""
+        client = GithubOrgClient("testorg")
+        result = client.has_license(repo, license_key)
+        self.assertEqual(result, expected)
+from parameterized import parameterized, param
+
+# A list of tuples
+@parameterized([
+    (2, 3, 5),
+    (3, 5, 8),
+])
+def test_add(a, b, expected):
+    assert_equal(a + b, expected)
+
+# A list of params
+@parameterized([
+    param("10", 10),
+    param("10", 16, base=16),
+])
+def test_int(str_val, expected, base=10):
+    assert_equal(int(str_val, base=base), expected)
+
+# An iterable of params
+@parameterized(
+    param.explicit(*json.loads(line))
+    for line in open("testcases.jsons")
+)
+def test_from_json_file(...):
+    ...
+
+# A callable which returns a list of tuples
+def load_test_cases():
+    return [
+        ("test1", ),
+        ("test2", ),
+    ]
+@parameterized(load_test_cases)
+def test_from_function(name):
+    ...
+
+    
 
