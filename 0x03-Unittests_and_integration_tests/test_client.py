@@ -51,3 +51,36 @@ class TestGithubOrgClient(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+Explanation
+🔹 1. Why @patch("client.get_json")?
+
+Because the class uses:
+    from utils import get_json
+inside client.py, so we MUST patch the function in the module where it is used, not where it is defined.
+
+🔹 2. @parameterized.expand([...])
+
+Runs the test twice:
+
+with "google"
+
+with "abc"
+
+🔹 3. Test logic
+
+A GithubOrgClient(org_name) instance is created.
+
+Accessing .org triggers a call to get_json(...).
+
+We ensure:
+
+get_json was called exactly once
+
+It was called with the correct URL
+
+The return value is ** forwarded correctly** from the mock value
+
+🔹 4. No real HTTP calls
+
+Because get_json is fully mocked.
+
