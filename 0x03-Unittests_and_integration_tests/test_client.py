@@ -395,6 +395,21 @@ test_concat (test_concat.TestConcatenation_0_say_cheese__) ... ok
 
 class Class:
     def method(self):
+
+
+    def test_public_repos(self):
+    """Test that public_repos returns the expected repo list."""
+    client = GithubOrgClient("test-org")
+    self.assertEqual(client.public_repos(), self.expected_repos)
+
+def test_public_repos_with_license(self):
+    """Test public_repos with a license filter."""
+    client = GithubOrgClient("test-org")
+    self.assertEqual(
+        client.public_repos(license="apache-2.0"),
+        self.apache2_repos
+    )
+
         pass
 
 with patch('__main__.Class') as MockClass:
@@ -402,3 +417,67 @@ with patch('__main__.Class') as MockClass:
     instance.method.return_value = 'foo'
     assert Class() is instance
     assert Class().method() == 'foo'
+
+    patch.TEST_PREFIX = 'foo'
+value = 3
+
+@patch('__main__.value', 'not three')
+class Thing:
+    def foo_one(self):
+        print(value)
+    def foo_two(self):
+        print(value)
+
+
+Thing().foo_one()
+
+Thing().foo_two()
+
+value
+
+# test_math.py
+from nose.tools import assert_equal
+from parameterized import parameterized, parameterized_class
+
+import unittest
+import math
+
+@parameterized([
+    (2, 2, 4),
+    (2, 3, 8),
+    (1, 9, 1),
+    (0, 9, 0),
+])
+def test_pow(base, exponent, expected):
+   assert_equal(math.pow(base, exponent), expected)
+
+class TestMathUnitTest(unittest.TestCase):
+   @parameterized.expand([
+       ("negative", -1.5, -2.0),
+       ("integer", 1, 1.0),
+       ("large fraction", 1.6, 1),
+   ])
+   def test_floor(self, name, input, expected):
+       assert_equal(math.floor(input), expected)
+
+@parameterized_class(('a', 'b', 'expected_sum', 'expected_product'), [
+   (1, 2, 3, 2),
+   (5, 5, 10, 25),
+])
+class TestMathClass(unittest.TestCase):
+   def test_add(self):
+      assert_equal(self.a + self.b, self.expected_sum)
+
+   def test_multiply(self):
+      assert_equal(self.a * self.b, self.expected_product)
+
+@parameterized_class([
+   { "a": 3, "expected": 2 },
+   { "b": 5, "expected": -4 },
+])
+class TestMathClassDict(unittest.TestCase):
+   a = 1
+   b = 1
+
+   def test_subtract(self):
+      assert_equal(self.a - self.b, self.expected)
