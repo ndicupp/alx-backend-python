@@ -315,3 +315,90 @@ def test_from_function(name):
 
     
 
+#!/usr/bin/env python3
+import unittest
+from unittest.mock import patch, MagicMock
+from parameterized import parameterized_class
+
+from client import GithubOrgClient
+from fixtures import org_payload, repos_payload, expected_repos, apache2_repos
+
+
+@parameterized_class([
+    {
+        "org_payload": org_payload,
+        "repos_payload": repos_payload,
+        "expected_repos": expected_repos,
+        "apache2_repos": apache2_repos,
+    }
+])
+class TestIntegrationGithubOrgClient(unittest.TestCase):
+    """Integration tests for GithubOrgClient.public_repos"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Start patching requests.get and configure side_effect."""
+        cls.get_patcher = patch("requests.get")
+        mock_get = cls.get_patcher.start()
+
+        # Create mock responses for each URL
+        def side_effect(url):
+            mock_response = MagicMock()
+            if url.endswith("/orgs/test-org"):
+                mock_response.json.return_value = cls.org_payload
+            elif url.endswith("/orgs/test-org/repos"):
+                mock_response.json.return_value = cls.repos_payload
+            return mock_response
+
+        mock_get.side_effect = side_effect
+
+    @classmethod
+    def tearDownClass(cls):
+        """Stop patching requests.get."""
+        cls.get_patcher.stop()
+
+    def test_public_repos(self):
+        """Test public_repos returns expected repo names."""
+        client = GithubOrgClient("test-org")
+        self.assertEqual(client.public_repos(), self.expected_repos)
+
+    def test_public_repos_with_license(self):
+        """Test public_repos with license filter."""
+        client = GithubOrgClient("test-org")
+        self.assertEqual(
+            client.public_repos(license="apache-2.0"),
+            self.apache2_repos,
+        )
+from parameterized import parameterized, parameterized_class
+
+def get_class_name(cls, num, params_dict):
+    # By default the generated class named includes either the "name"
+    # parameter (if present), or the first string value. This example shows
+    # multiple parameters being included in the generated class name:
+    return "%s_%s_%s%s" %(
+        cls.__name__,
+        num,
+        parameterized.to_safe_name(params_dict['a']),
+        parameterized.to_safe_name(params_dict['b']),
+    )
+
+@parameterized_class([
+   { "a": "hello", "b": " world!", "expected": "hello world!" },
+   { "a": "say ", "b": " cheese :)", "expected": "say cheese :)" },
+], class_name_func=get_class_name)
+class TestConcatenation(TestCase):
+  def test_concat(self):
+      self.assertEqual(self.a + self.b, self.expected)
+$ nosetests -v test_math.py
+test_concat (test_concat.TestConcatenation_0_hello_world_) ... ok
+test_concat (test_concat.TestConcatenation_0_say_cheese__) ... ok
+
+class Class:
+    def method(self):
+        pass
+
+with patch('__main__.Class') as MockClass:
+    instance = MockClass.return_value
+    instance.method.return_value = 'foo'
+    assert Class() is instance
+    assert Class().method() == 'foo'
