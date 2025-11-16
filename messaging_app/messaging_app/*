@@ -209,3 +209,56 @@ Now I have a Django project with:
 .Basic project structure set up
 
 .Database initialized
+
+1. Run Migrations
+Step 1 — Make migrations
+python manage.py makemigrations
+
+If everything is correct, Django will detect your models and generate migration files.
+
+Common errors & fixes
+Error	Cause	Fix
+No changes detected	You forgot to register your app in INSTALLED_APPS	Add app to INSTALLED_APPS
+AppRegistryNotReady	Circular import or wrong app structure	Check imports & ensure apps follow Django structure
+FieldError	Mistyped field or invalid model option	Recheck model fields spelling & arguments
+2. Apply migrations
+python manage.py migrate
+
+This applies all migrations to your database.
+
+Common migration errors & solutions
+Error	What it means	How to fix
+OperationalError: no such table	Migration order broken	Delete faulty migration, re-run makemigrations
+InconsistentMigrationHistory	DB and migrations don’t match	Reset DB or fake migrations (--fake)
+IntegrityError	Null constraints or duplicate data	Adjust model default, or clear old DB data
+
+If the project is new, easiest fix is sometimes:
+rm db.sqlite3
+rm app/migrations/00*.py
+python manage.py makemigrations
+python manage.py migrate
+
+3. Run the server
+python manage.py runserver
+
+Server running at:
+http://127.0.0.1:8000/
+Common runserver errors
+Error	Meaning	Fix
+ModuleNotFoundError	Wrong import path	Use relative imports or correct app name
+ImproperlyConfigured	Missing settings, bad middleware	Re-check settings.py
+DisallowedHost	ALLOWED_HOSTS empty	Set ALLOWED_HOSTS = ["*"] for development
+Port already in use	Another process using port	Use another port: runserver 8080
+4. Test your application
+
+Visit your endpoints:
+
+/admin/
+
+/api/v1/... (if you used versioning)
+
+/api/properties/
+
+/api/bookings/
+
+Any custom routes you added
