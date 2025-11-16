@@ -82,3 +82,11 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message from {self.sender} in {self.conversation}"
+python manage.py makemigrations
+python manage.py migrate
+rm db.sqlite3
+rm app/migrations/00*.py
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
+http://127.0.0.1:8000/
