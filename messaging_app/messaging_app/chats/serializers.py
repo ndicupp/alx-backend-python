@@ -145,3 +145,12 @@ Constraints:
     Review Table: Constraints on rating values and foreign keys for property_id and user_id.
     Message Table: Foreign key constraints on sender_id and recipient_id.
 
+python manage.py makemigrations
+python manage.py migrate
+rm db.sqlite3
+rm app/migrations/00*.py
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
+http://127.0.0.1:8000/
+
