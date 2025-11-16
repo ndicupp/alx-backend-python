@@ -268,3 +268,12 @@ from django.apps import AppConfig
 class MessagingAppConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'messaging_app'
+
+python manage.py makemigrations
+python manage.py migrate
+rm db.sqlite3
+rm app/migrations/00*.py
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
+http://127.0.0.1:8000/
