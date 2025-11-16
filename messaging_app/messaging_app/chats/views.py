@@ -126,3 +126,11 @@ Indexing:
 
 **Primary Keys:** Indexed automatically.
 **Additional Indexes:** Indexes on email (User), property_id (Property and Booking), and booking_id (Booking and Payment)
+python manage.py makemigrations
+python manage.py migrate
+rm db.sqlite3
+rm app/migrations/00*.py
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
+http://127.0.0.1:8000/
