@@ -1,1 +1,134 @@
+Step 1 — Get your JWT token (login)
+POST
+POST http://localhost:8000/api/token/
+Body → JSON
+{
+  "username": "testuser",
+  "password": "yourpassword"
+}
+
+Expected response:
+{
+  "refresh": "xxxx",
+  "access": "yyyy"
+}
+
+Copy the access token.
+Step 2 — Add the token in Postman
+
+In Postman:
+
+Go to Authorization tab
+
+Select Bearer Token
+
+Paste the access token
+
+Now all authorized requests will work.
+Step 3 — Test creating a conversation
+POST
+POST http://localhost:8000/conversations/
+
+Body → JSON
+
+Example for a 2-user conversation:
+{
+  "participants": [1, 5]
+}
+
+Expected:
+
+201 Created
+
+Conversation object should include both participants
+
+Your user must be one of the participants, otherwise 403
+Step 4 — Test sending a message
+POST
+POST http://localhost:8000/messages/
+
+Body → JSON
+{
+  "conversation": 3,
+  "content": "Hello! This is my first message."
+}
+
+You do NOT set the sender; it’s automatically assigned to the logged-in user.
+
+Expected:
+{
+  "id": 15,
+  "conversation": 3,
+  "sender": 1,
+  "content": "Hello! This is my first message.",
+  "timestamp": "2025-11-21T14:00:00Z"
+}
+
+Step 5 — Fetch conversations
+GET
+GET http://localhost:8000/conversations/
+
+Expected:
+
+Only conversations you belong to should appear
+
+Pagination may apply if you set it
+Step 6 — Fetch messages in a conversation
+GET
+GET http://localhost:8000/messages/?conversation=3
+
+Or apply filters created in Task 2:
+
+by sender
+/messages/?sender=1
+
+by date range
+/messages/?start_date=2025-01-01T00:00
+
+pagination
+/messages/?page=2
+
+Step 7 — Test unauthorized access (very important)
+Case A — No token
+
+Remove the Bearer Token in Postman and call:
+GET http://localhost:8000/conversations/
+
+Expected:
+401 Unauthorized
+
+Case B — Access conversation you are NOT a participant of
+
+Try:
+GET http://localhost:8000/conversations/999
+
+If you are not in that conversation:
+
+Expected:
+403 Forbidden
+
+because your custom permission class blocks access.
+Case C — Send message to a conversation you don’t belong to
+POST http://localhost:8000/messages/
+{
+  "conversation": 999,
+  "content": "Hacking attempt"
+}
+
+Expected:
+403 Forbidden
+
+This proves your IsParticipantOfConversation class is working correctly.
+Test Checklist (You should confirm each)
+Test	Expected
+Login with JWT	✔ receive access + refresh tokens
+Use access token	✔ authenticated requests work
+Create conversation	✔ only if logged-in & participant
+Send message	✔ only if in the conversation
+Get conversations	✔ only your own
+Get messages	✔ only your own
+Unauthorized request	❌ rejected (401)
+Access someone else’s conversation	❌ rejected (403)
+
+Everything is correct if you pass all the above tests.
 
