@@ -271,6 +271,12 @@ class MessagingAppConfig(AppConfig):
 
 python manage.py makemigrations
 python manage.py migrate
+rm db.sqlite3
+rm app/migrations/00*.py
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
+http://127.0.0.1:8000/
 
 Add JWT Authentication + User Access Control
 Step 1 — Install SimpleJWT
@@ -394,9 +400,3 @@ we have:
 ✔ Users only access THEIR own conversations
 ✔ Users only access THEIR own messages
 
-rm db.sqlite3
-rm app/migrations/00*.py
-python manage.py makemigrations
-python manage.py migrate
-python manage.py runserver
-http://127.0.0.1:8000/
