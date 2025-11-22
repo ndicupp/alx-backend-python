@@ -1,1 +1,60 @@
+Set up the Django messaging app locally
+1.Locate your messaging_app project
+
+This is the project you built during Building Robust APIs.
+
+Example structure:
+Documents/
+   └── messaging_app/
+        ├── manage.py
+        ├── config/
+        ├── apps/
+        └── requirements.txt
+2.Make a full copy of this directory
+
+If you're using a GUI (Windows Explorer / Finder):
+
+Right-click → Copy
+
+Right-click → Paste
+
+Rename the new folder
+
+If you're using terminal (recommended):
+cp -r messaging_app Django-Middleware-0x03
+
+This creates:
+Django-Middleware-0x03/
+
+3.Verify the copy
+
+Inside your new folder, you should still see:
+Django-Middleware-0x03/
+├── manage.py
+├── config/
+├── apps/
+└── requirements.txt
+
+4.Optional but Recommended: Create a new virtual environment
+
+Inside the new folder:
+python -m venv venv
+
+Activate it:
+
+Windows:
+venv\Scripts\activate
+
+Mac/Linux:
+source venv/bin/activate
+
+5.Install dependencies
+
+Inside your virtual environment:
+pip install -r requirements.txt
+
+6.Run the server to verify everything works
+python manage.py runserver
+
+
 
