@@ -1,1 +1,136 @@
+Track Message Edits Using Django Signals
+
+We will do three things:
+
+Add an edited field to the Message model
+
+Create a MessageHistory model
+
+Use pre_save to store the old message content before updates
+
+Expose edit history so the UI can display it
+
+Step 1 — Update the Message Model
+# messages/models.py
+from django.db import models
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class Message(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    edited = models.BooleanField(default=False)  # NEW FIELD
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Message by {self.user}"
+
+Run migrations:
+python manage.py makemigrations
+python manage.py migrate
+
+Step 2 — Create MessageHistory Model
+
+This will store the old version every time a message is edited.
+# messages/models.py
+
+class MessageHistory(models.Model):
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="history")
+    old_content = models.TextField()
+    edited_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"History for Message {self.message.id}"
+
+Make and run migrations again:
+python manage.py makemigrations
+python manage.py migrate
+
+Step 3 — Implement pre_save Signal
+
+This signal runs before Django saves a message.
+We check if:
+
+The message already exists
+
+The content is changing
+
+If yes → save the old content into MessageHistory.
+
+Create a signals.py file:
+# messages/signals.py
+from django.db.models.signals import pre_save
+from django.dispatch import receiver
+from .models import Message, MessageHistory
+
+@receiver(pre_save, sender=Message)
+def log_message_edit(sender, instance, **kwargs):
+    # If message is being updated (NOT created)
+    if instance.id:
+        old_message = Message.objects.get(id=instance.id)
+
+        if old_message.content != instance.content:
+            # Save the old content to MessageHistory
+            MessageHistory.objects.create(
+                message=instance,
+                old_content=old_message.content
+            )
+
+            # Mark the message as edited
+            instance.edited = True
+
+Step 4 — Register Signals
+
+Add this inside your app’s apps.py:
+# messages/apps.py
+from django.apps import AppConfig
+
+class MessagesConfig(AppConfig):
+    name = 'messages'
+
+    def ready(self):
+        import messages.signals
+
+And update your INSTALLED_APPS:
+INSTALLED_APPS = [
+    ...
+    'messages.apps.MessagesConfig',
+]
+
+Step 5 — Display Message Edit History (Frontend)
+
+Your API could return history like:
+# messages/serializers.py
+from rest_framework import serializers
+from .models import Message, MessageHistory
+
+class MessageHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MessageHistory
+        fields = ['old_content', 'edited_at']
+
+class MessageSerializer(serializers.ModelSerializer):
+    history = MessageHistorySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Message
+        fields = ['id', 'user', 'content', 'edited', 'timestamp', 'history']
+
+Then in your UI (React / Next.js example):
+{message.edited && (
+    <button onClick={() => setShowHistory(!showHistory)}>
+        View Edit History
+    </button>
+)}
+
+{showHistory && message.history.map((entry, i) => (
+    <div key={i} className="history-item">
+        <p><strong>Old version:</strong> {entry.old_content}</p>
+        <small>Edited at: {new Date(entry.edited_at).toLocaleString()}</small>
+    </div>
+))}
+
+
+
 
