@@ -1,358 +1,89 @@
-Track Message Edits Using Django Signals
-
-We will do three things:
-
-Add an edited field to the Message model
-
-Create a MessageHistory model
-
-Use pre_save to store the old message content before updates
-
-Expose edit history so the UI can display it
-
-Step 1 — Update the Message Model
-# messages/models.py
+Custom Manager for Unread Messages
+1. Add read Field to the Message Model
+# models.py
 from django.db import models
-from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
 
-User = get_user_model()
 
 class Message(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_messages")
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_messages")
     content = models.TextField()
-    edited = models.BooleanField(default=False)  # NEW FIELD
     timestamp = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
-        return f"Message by {self.user}"
+    # NEW FIELD
+    read = models.BooleanField(default=False)
 
-Run migrations:
-python manage.py makemigrations
-python manage.py migrate
-
-Step 2 — Create MessageHistory Model
-
-This will store the old version every time a message is edited.
-# messages/models.py
-
-class MessageHistory(models.Model):
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="history")
-    old_content = models.TextField()
-    edited_at = models.DateTimeField(auto_now_add=True)
+    objects = models.Manager()  # default manager (keep it!)
+    unread = None  # placeholder — we will attach the custom manager below
 
     def __str__(self):
-        return f"History for Message {self.message.id}"
+        return f"Message from {self.sender} to {self.receiver}"
 
-Make and run migrations again:
-python manage.py makemigrations
-python manage.py migrate
+2. Create the Custom Manager: UnreadMessagesManager
 
-Step 3 — Implement pre_save Signal
+This manager filters only unread messages for a specific user.
+# managers.py
+from django.db import models
 
-This signal runs before Django saves a message.
-We check if:
+class UnreadMessagesManager(models.Manager):
+    def for_user(self, user):
+        """
+        Returns unread messages for a specific user.
+        Optimized using .only() to load only necessary fields.
+        """
+        return (
+            super()
+            .get_queryset()
+            .filter(receiver=user, read=False)
+            .only("id", "sender", "content", "timestamp")  # optimization
+        )
 
-The message already exists
 
-The content is changing
+3. Attach the Custom Manager to Your Model
 
-If yes → save the old content into MessageHistory.
+Update the Message model like this:
+# models.py
+from .managers import UnreadMessagesManager
 
-Create a signals.py file:
-# messages/signals.py
-from django.db.models.signals import pre_save
-from django.dispatch import receiver
-from .models import Message, MessageHistory
-
-@receiver(pre_save, sender=Message)
-def log_message_edit(sender, instance, **kwargs):
-    # If message is being updated (NOT created)
-    if instance.id:
-        old_message = Message.objects.get(id=instance.id)
-
-        if old_message.content != instance.content:
-            # Save the old content to MessageHistory
-            MessageHistory.objects.create(
-                message=instance,
-                old_content=old_message.content
-            )
-
-            # Mark the message as edited
-            instance.edited = True
-
-Step 4 — Register Signals
-
-Add this inside your app’s apps.py:
-# messages/apps.py
-from django.apps import AppConfig
-
-class MessagesConfig(AppConfig):
-    name = 'messages'
-
-    def ready(self):
-        import messages.signals
-
-And update your INSTALLED_APPS:
-INSTALLED_APPS = [
+class Message(models.Model):
     ...
-    'messages.apps.MessagesConfig',
-]
+    read = models.BooleanField(default=False)
 
-Step 5 — Display Message Edit History (Frontend)
+    objects = models.Manager()
+    unread = UnreadMessagesManager()   # attach custom manager
 
-Your API could return history like:
-# messages/serializers.py
-from rest_framework import serializers
-from .models import Message, MessageHistory
+4. Use It in Your Views
 
-class MessageHistorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MessageHistory
-        fields = ['old_content', 'edited_at']
+Example inbox view showing only unread messages:
+# views.py
+from django.shortcuts import render
+from .models import Message
 
-class MessageSerializer(serializers.ModelSerializer):
-    history = MessageHistorySerializer(many=True, read_only=True)
+def inbox(request):
+    unread_messages = Message.unread.for_user(request.user)
 
-    class Meta:
-        model = Message
-        fields = ['id', 'user', 'content', 'edited', 'timestamp', 'history']
+    return render(request, "messages/inbox.html", {
+        "messages": unread_messages
+    })
 
-Then in your UI (React / Next.js example):
-{message.edited && (
-    <button onClick={() => setShowHistory(!showHistory)}>
-        View Edit History
-    </button>
-)}
+✔ This will return only unread messages
+✔ Optimized by .only() so we don’t fetch unnecessary fields
+✔ Clean and reusable
 
-{showHistory && message.history.map((entry, i) => (
-    <div key={i} className="history-item">
-        <p><strong>Old version:</strong> {entry.old_content}</p>
-        <small>Edited at: {new Date(entry.edited_at).toLocaleString()}</small>
+5. Example Template Display
+<!-- templates/messages/inbox.html -->
+<h2>Unread Messages</h2>
+
+{% for msg in messages %}
+    <div>
+        <strong>From:</strong> {{ msg.sender.username }}<br>
+        <p>{{ msg.content }}</p>
+        <small>{{ msg.timestamp }}</small>
     </div>
-))}
-
-
-Modify the Message Model (Self-Referential FK)
-# In myapp/models.py
-from django.db import models
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
-
-class Message(models.Model):
-    sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
-    receiver = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE)
-    content = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-    edited = models.BooleanField(default=False)
-
-    # --- NEW FIELD: Self-Referential Foreign Key ---
-    # Nullable (null=True) because not all messages are replies (they can be root messages)
-    # on_delete=models.SET_NULL means if the parent is deleted, the reply is orphaned (safer than CASCADE)
-    parent_message = models.ForeignKey(
-        'self', 
-        null=True, 
-        blank=True, 
-        related_name='replies', # This is the reverse accessor (e.g., message.replies.all())
-        on_delete=models.SET_NULL
-    )
-    # ------------------------------------------------
-
-    def __str__(self):
-        return f"Message {self.id}: {self.content[:30]}..."
-
-    # Custom manager method to get only root messages
-    objects = models.Manager() 
-
-    class Meta:
-        ordering = ['timestamp']
-
-Optimized Querying with select_related and prefetch_related
-# In myapp/services.py or views.py
-from myapp.models import Message
-
-def get_optimized_conversation_list():
-    """
-    Retrieves all root messages and eagerly loads necessary related data.
-    """
-    # 1. Filter for root messages (messages without a parent)
-    root_messages = Message.objects.filter(parent_message__isnull=True)
-    
-    # 2. Eagerly load the sender of the root message (ForeignKey: 1-to-1 optimization)
-    root_messages = root_messages.select_related('sender') 
-    
-    # 3. Eagerly load all direct replies (Reverse ForeignKey: 1-to-N optimization)
-    # This fetches all replies for all root messages in one or two extra queries, 
-    # then stitches them to the correct root message in Python.
-    optimized_messages = root_messages.prefetch_related(
-        'replies', 
-        'replies__sender' # Also prefetch the sender of the replies to avoid N+1 there too!
-    )
-    
-    # The QuerySet is still lazy and hasn't hit the DB yet.
-    return optimized_messages
-
-# Conceptual usage:
-# optimized_set = get_optimized_conversation_list()
-# for message in optimized_set:
-#     print(f"Root: {message.content} by {message.sender.username}") 
-#     # Accessing message.replies is now cheap (cache hit in Python)
-#     for reply in message.replies.all():
-#         print(f"  -> Reply: {reply.content} by {reply.sender.username}")
-
-Implement Recursive Query (Deep Threading)
-# In myapp/utils.py or services.py
-
-def get_threaded_conversation(root_message_id):
-    """
-    Fetches a full conversation tree, optimized for a single root message.
-    """
-    
-    try:
-        # Fetch the root message and prefetch all replies recursively
-        # We need to prefetch replies, and their replies, and their sender fields.
-        root = Message.objects.select_related('sender').prefetch_related(
-            'replies__sender',
-            'replies__replies__sender',
-            # You would list out the depth you want to support here (e.g., 3-4 levels)
-        ).get(pk=root_message_id)
-
-    except Message.DoesNotExist:
-        return None
-
-    # Python function to structure the data into a recursive list/dict
-    def build_thread_tree(message_instance):
-        thread_node = {
-            'id': message_instance.id,
-            'content': message_instance.content,
-            'sender': message_instance.sender.username,
-            'timestamp': message_instance.timestamp,
-            'replies': []
-        }
-        
-        # This is where the recursive step happens
-        # message_instance.replies.all() is now a cache hit due to prefetch_related!
-        for reply in message_instance.replies.all():
-            thread_node['replies'].append(build_thread_tree(reply))
-            
-        return thread_node
-
-    # Build the tree starting from the root message
-    return build_thread_tree(root)
-
-# Conceptual Display:
-# thread_data = get_threaded_conversation(1)
-# # The resulting thread_data is a dictionary ready to be converted to JSON 
-# # and easily rendered recursively in a frontend framework.
-
-This is a challenging and essential task for any messaging or commenting feature, as it demands advanced use of the Django ORM for self-referential foreign keys and efficient eager loading.Here is the perfect, step-by-step solution for implementing threaded conversations and optimizing their retrieval:🧵 Task 4: Threaded Conversations and Optimized QueriesStep 1: Modify the Message Model (Self-Referential FK)We modify the Message model to include a parent_message field that points back to another Message instance.Python# In myapp/models.py
-from django.db import models
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
-
-class Message(models.Model):
-    sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
-    receiver = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE)
-    content = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-    edited = models.BooleanField(default=False)
-
-    # --- NEW FIELD: Self-Referential Foreign Key ---
-    # Nullable (null=True) because not all messages are replies (they can be root messages)
-    # on_delete=models.SET_NULL means if the parent is deleted, the reply is orphaned (safer than CASCADE)
-    parent_message = models.ForeignKey(
-        'self', 
-        null=True, 
-        blank=True, 
-        related_name='replies', # This is the reverse accessor (e.g., message.replies.all())
-        on_delete=models.SET_NULL
-    )
-    # ------------------------------------------------
-
-    def __str__(self):
-        return f"Message {self.id}: {self.content[:30]}..."
-
-    # Custom manager method to get only root messages
-    objects = models.Manager() 
-
-    class Meta:
-        ordering = ['timestamp']
-Step 2: Optimized Querying with select_related and prefetch_relatedTo display a list of root messages and their immediate replies without causing the N+1 query problem, we use eager loading.select_related('parent_message'): Used for Foreign Key relationships (one-to-one or many-to-one). It performs a single SQL JOIN to fetch the parent message data along with the reply message.prefetch_related('replies', 'sender'): Used for reverse Foreign Key (one-to-many) and Many-to-Many relationships. It performs separate lookups for each relationship and joins them in Python, which is much faster than running N individual queries.Python# In myapp/services.py or views.py
-from myapp.models import Message
-
-def get_optimized_conversation_list():
-    """
-    Retrieves all root messages and eagerly loads necessary related data.
-    """
-    # 1. Filter for root messages (messages without a parent)
-    root_messages = Message.objects.filter(parent_message__isnull=True)
-    
-    # 2. Eagerly load the sender of the root message (ForeignKey: 1-to-1 optimization)
-    root_messages = root_messages.select_related('sender') 
-    
-    # 3. Eagerly load all direct replies (Reverse ForeignKey: 1-to-N optimization)
-    # This fetches all replies for all root messages in one or two extra queries, 
-    # then stitches them to the correct root message in Python.
-    optimized_messages = root_messages.prefetch_related(
-        'replies', 
-        'replies__sender' # Also prefetch the sender of the replies to avoid N+1 there too!
-    )
-    
-    # The QuerySet is still lazy and hasn't hit the DB yet.
-    return optimized_messages
-
-# Conceptual usage:
-# optimized_set = get_optimized_conversation_list()
-# for message in optimized_set:
-#     print(f"Root: {message.content} by {message.sender.username}") 
-#     # Accessing message.replies is now cheap (cache hit in Python)
-#     for reply in message.replies.all():
-#         print(f"  -> Reply: {reply.content} by {reply.sender.username}")
-Step 3: Implement Recursive Query (Deep Threading)For arbitrarily deep threading, the standard ORM is insufficient. True recursive querying in Django is complex and often relies on raw SQL or specialized libraries. However, the most ProDev standard way to handle multi-level replies is by limiting the depth or using a simple recursive function that runs efficiently after the primary set is fetched and relies on the prefetching we already did for the immediate replies.Since the instructions specifically mention a "recursive query using Django's ORM," we will demonstrate a function that processes the data recursively in Python, which is the practical approach, often relying on the primary prefetch_related.Python# In myapp/utils.py or services.py
-
-def get_threaded_conversation(root_message_id):
-    """
-    Fetches a full conversation tree, optimized for a single root message.
-    """
-    
-    try:
-        # Fetch the root message and prefetch all replies recursively
-        # We need to prefetch replies, and their replies, and their sender fields.
-        root = Message.objects.select_related('sender').prefetch_related(
-            'replies__sender',
-            'replies__replies__sender',
-            # You would list out the depth you want to support here (e.g., 3-4 levels)
-        ).get(pk=root_message_id)
-
-    except Message.DoesNotExist:
-        return None
-
-    # Python function to structure the data into a recursive list/dict
-    def build_thread_tree(message_instance):
-        thread_node = {
-            'id': message_instance.id,
-            'content': message_instance.content,
-            'sender': message_instance.sender.username,
-            'timestamp': message_instance.timestamp,
-            'replies': []
-        }
-        
-        # This is where the recursive step happens
-        # message_instance.replies.all() is now a cache hit due to prefetch_related!
-        for reply in message_instance.replies.all():
-            thread_node['replies'].append(build_thread_tree(reply))
-            
-        return thread_node
-
-    # Build the tree starting from the root message
-    return build_thread_tree(root)
-
-# Conceptual Display:
-# thread_data = get_threaded_conversation(1)
-# # The resulting thread_data is a dictionary ready to be converted to JSON 
-# # and easily rendered recursively in a frontend framework.
-ProDev Summary of the Solution:Criteria AchievedImplementation DetailORM Tool / TechniqueThread StructureAdded parent_message = ForeignKey('self', ...) to Message.Self-Referential FKFK OptimizationUsed .select_related('sender').SQL JOIN (Fast for 1-to-1 or 1-to-few)Reverse FK OptimizationUsed .prefetch_related('replies', 'replies__sender').Python JOIN (Fast for 1-to-N, avoids N+1)Recursive FetchImplemented a Python function (build_thread_tree) that uses the pre-fetched data recursively.Hybrid ORM/Python Recursion (Most practical ProDev way to handle arbitrary depth)
+{% empty %}
+    <p>No unread messages.</p>
+{% endfor %}
 
 
 
