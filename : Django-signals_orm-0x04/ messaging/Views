@@ -1,1 +1,137 @@
+Automatic Data Cleanup on User Deletion
+Step 1: Model Setup (Using CASCADE for Efficiency)
+The primary best practice is to set the on_delete argument on relevant Foreign Keys to models.CASCADE. This tells the database to automatically delete dependent rows when the linked User record is deleted.
+
+We will update the Message, Notification, and MessageHistory models to ensure this happens for data owned by the user.
+
+# In myapp/models.py
+from django.db import models
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+# --- MODEL MODIFICATIONS: Implementing CASCADE ---
+
+class Message(models.Model):
+    # If the sender is deleted, all their sent messages are deleted.
+    sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
+    
+    # If the receiver is deleted, all messages sent to them are also deleted.
+    receiver = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE)
+    # ... other fields ...
+
+class Notification(models.Model):
+    # If the user is deleted, all their notifications are deleted.
+    user = models.ForeignKey(User, related_name='notifications', on_delete=models.CASCADE)
+    # ... other fields ...
+
+class MessageHistory(models.Model):
+    # If the parent message is deleted (via CASCADE from User), the history goes too.
+    # The 'editor' field should use SET_NULL so the history record remains, but the link is gone.
+    editor = models.ForeignKey(User, related_name='edited_history', on_delete=models.SET_NULL, null=True)
+    # ... other fields ...
+
+
+This is the perfect final task to bring together Models, ORM, and Signals! The most professional and recommended way to handle account deletion is to rely on Foreign Key constraints (on_delete=models.CASCADE) wherever possible, as it's faster, safer, and handled directly by the database. We will use the post_delete signal only where necessary (e.g., for related models that reference the user in a non-standard way, or for cleanup tasks that Django's ORM doesn't cover).
+
+Here is the complete, ProDev implementation for the "Automatic Data Cleanup on User Deletion":
+
+⚙️ Task 3: Automatic Data Cleanup on User Deletion
+Step 1: Model Setup (Using CASCADE for Efficiency)
+The primary best practice is to set the on_delete argument on relevant Foreign Keys to models.CASCADE. This tells the database to automatically delete dependent rows when the linked User record is deleted.
+
+We will update the Message, Notification, and MessageHistory models to ensure this happens for data owned by the user.
+
+Python
+
+# In myapp/models.py
+from django.db import models
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+# --- MODEL MODIFICATIONS: Implementing CASCADE ---
+
+class Message(models.Model):
+    # If the sender is deleted, all their sent messages are deleted.
+    sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
+    
+    # If the receiver is deleted, all messages sent to them are also deleted.
+    receiver = models.ForeignKey(User, related_name='received_messages', on_delete=models.CASCADE)
+    # ... other fields ...
+
+class Notification(models.Model):
+    # If the user is deleted, all their notifications are deleted.
+    user = models.ForeignKey(User, related_name='notifications', on_delete=models.CASCADE)
+    # ... other fields ...
+
+class MessageHistory(models.Model):
+    # If the parent message is deleted (via CASCADE from User), the history goes too.
+    # The 'editor' field should use SET_NULL so the history record remains, but the link is gone.
+    editor = models.ForeignKey(User, related_name='edited_history', on_delete=models.SET_NULL, null=True)
+    # ... other fields ...
+
+Step 2: The Cleanup Signal (Only for Non-CASCADE Tasks)
+Since CASCADE handles most of the deletion (messages, notifications, message history), we use the post_delete signal only for tasks that Django or the database won't automatically handle, such as logging the event or cleaning up related files (e.g., user profile images).
+
+For this task, we will simulate a "Final Cleanup Log" and a related ProfileImage model that was defined to be protected and needs manual deletion.
+
+# In myapp/signals.py
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+from django.contrib.auth import get_user_model
+# Assuming a separate model that holds a user's image files:
+# from myapp.models import ProfileImage 
+from django.core.files.storage import default_storage
+
+User = get_user_model()
+
+@receiver(post_delete, sender=User, 
+          dispatch_uid="user_cleanup_on_delete")
+def cleanup_user_data_post_delete(sender, instance, **kwargs):
+    """
+    Triggers AFTER the User object is deleted from the database.
+    This signal is used for non-database cleanup tasks (like files) 
+    or final logging, as CASCADE handles model deletion.
+    """
+    print(f"--- POST_DELETE SIGNAL: User {instance.username} deleted. ---")
+
+    # 1. Log the deletion (Crucial for auditing)
+    print(f"[AUDIT LOG] Account ID {instance.pk} ({instance.username}) was successfully deleted.")
+
+    # 2. Manual cleanup of files (Cleanup logic that CASCADE cannot handle)
+    # The image file path is typically stored on a related model.
+    try:
+        # Example: Fetch a protected related object and delete the file it references
+        # profile_image = ProfileImage.objects.get(user=instance)
+        # default_storage.delete(profile_image.file_path)
+        # print(f"[FILE CLEANUP] Deleted profile image for {instance.username}.")
+        pass
+    except Exception as e:
+        # Handle cases where the related image model or file doesn't exist
+        print(f"[WARNING] Could not delete auxiliary files for {instance.username}. Error: {e}")
+Step 3: The View (Triggering the Deletion)
+The view's job is simple: confirm the user, call the .delete() method on the instance, and return a success response. The database (via CASCADE) and the post_delete signal handle all the heavy lifting.
+# In myapp/views.py
+from django.shortcuts import redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import logout
+from django.http import HttpResponse
+
+@login_required
+def delete_user_account(request):
+    if request.method == 'POST':
+        user = request.user
+        
+        # 1. Log out the user before deleting the session
+        logout(request) 
+        
+        # 2. Deleting the user triggers the CASCADE operation in the database
+        #    and fires the post_delete signal *after* the deletion is complete.
+        user.delete()
+        
+        # 3. Return a final response
+        return HttpResponse("Your account and all associated data have been permanently deleted.", status=200)
+        
+    return HttpResponse("Use a POST request to confirm account deletion.", status=405) # Method Not Allowed
 
