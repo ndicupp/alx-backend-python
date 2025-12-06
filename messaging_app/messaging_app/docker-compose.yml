@@ -47,3 +47,65 @@ docker compose up --build
 docker compose exec web python manage.py migrate
 
 
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: messaging_app_web
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DB_NAME: messaging_db
+      DB_USER: messaging_user
+      DB_PASSWORD: messaging_pass
+      DB_HOST: db
+      DB_PORT: 3306
+
+  db:
+    image: mysql:8.0
+    container_name: messaging_app_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: messaging_db
+      MYSQL_USER: messaging_user
+      MYSQL_PASSWORD: messaging_pass
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+
+volumes:
+  mysql_data:
+
+
+volumes:
+  mysql_data:
+
+db:
+  volumes:
+    - mysql_data:/var/lib/mysql
+
+Now database data persists even if you run:
+docker-compose down
+docker-compose up --build
+
+docker-compose up -d
+
+docker exec -it messaging_app_db mysql -u messaging_user -pmessaging_pass messaging_db
+
+CREATE TABLE test (id INT);
+INSERT INTO test VALUES (1);
+SELECT * FROM test;
+
+docker-compose down
+docker-compose up -d
+
+
+
