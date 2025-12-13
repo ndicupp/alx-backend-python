@@ -1,1 +1,85 @@
+#!/bin/bash
+
+# Define the name of the Kubernetes Deployment we created in Task 1
+DEPLOYMENT_NAME="django-app-deployment"
+SERVICE_NAME="django-app-service"
+
+# --- 1. Scale the Deployment (Instruction: increase the number of replicas to 3) ---
+echo "--- 1. Scaling deployment '$DEPLOYMENT_NAME' to 3 replicas... ---"
+# We use the deployment name and specify the desired number of replicas.
+kubectl scale deployment $DEPLOYMENT_NAME --replicas=3
+
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to scale deployment. Ensure the deployment name is correct."
+    exit 1
+fi
+
+echo "Scaling initiated. Waiting a few seconds for new pods to be created..."
+sleep 10 # Give the cluster time to create the new pod
+
+# --- 2. Verify Scaling (Instruction: Verify that multiple pods are running) ---
+echo -e "\n--- 2. Verifying the number of running pods (should be 3)... ---"
+kubectl get pods -l app=django-app
+
+# --- 3. Prepare for Load Testing (Requires Minikube IP and Service Port) ---
+echo -e "\n--- 3. Preparing for Load Testing... ---"
+# Get the Minikube IP address
+MINIKUBE_IP=$(minikube ip)
+if [ $? -ne 0 ] || [ -z "$MINIKUBE_IP" ]; then
+    echo "Error: Could not retrieve Minikube IP. Ensure Minikube is running."
+    exit 1
+fi
+
+# Expose the ClusterIP service externally via NodePort temporarily for testing with 'wrk'
+echo "Exposing ClusterIP service '$SERVICE_NAME' via NodePort for external access..."
+kubectl expose service $SERVICE_NAME --type=NodePort --name=$SERVICE_NAME-nodeport --port=80 --target-port=8000
+sleep 5 # Wait for the NodePort to be assigned
+
+# Get the assigned NodePort
+NODE_PORT=$(kubectl get service $SERVICE_NAME-nodeport -o=jsonpath='{.spec.ports[0].nodePort}')
+if [ -z "$NODE_PORT" ]; then
+    echo "Error: Could not retrieve NodePort. Load testing aborted."
+    exit 1
+fi
+
+TARGET_URL="http://$MINIKUBE_IP:$NODE_PORT/"
+echo "Django app is accessible at: $TARGET_URL (via NodePort $NODE_PORT)"
+
+# --- 4. Perform Load Testing (Instruction: Perform load testing using 'wrk') ---
+echo -e "\n--- 4. Performing 30-second load test with 'wrk' (4 threads, 100 connections)... ---"
+if ! command -v wrk &> /dev/null
+then
+    echo "Warning: 'wrk' not found. Skipping load testing step."
+    echo "To perform this step, please install wrk (e.g., 'sudo apt install wrk' on Debian/Ubuntu)."
+else
+    # Run a load test (e.g., 30 seconds, 4 threads, 100 concurrent connections)
+    wrk -t4 -c100 -d30s $TARGET_URL
+fi
+
+# --- 5. Monitor Resource Usage (Instruction: Monitors Resource Usage using kubectl top) ---
+# Note: 'kubectl top' requires the Metrics Server to be running.
+echo -e "\n--- 5. Monitoring CPU and Memory Usage with 'kubectl top pods'... ---"
+echo "(If this fails, the Kubernetes Metrics Server may need to be installed on your cluster: 'minikube addons enable metrics-server')"
+kubectl top pods -l app=django-app --containers
+
+echo -e "\n--- Scaling and Monitoring Task Complete! ---"
+echo "Don't forget to clean up the temporary NodePort service if you are done testing:"
+echo "kubectl delete service $SERVICE_NAME-nodeport"
+
+
+nano kubctl-0x01
+
+chmod +x kubctl-0x01
+
+./kubctl-0x01
+
+kubectl scale deployment django-messaging-app --replicas=3
+
+kubectl get pods
+
+wrk -t4 -c50 -d30s http://<cluster-ip>/
+
+kubectl top pods
+kubectl top nodes
+
 
