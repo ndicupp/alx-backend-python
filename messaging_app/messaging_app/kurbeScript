@@ -1,1 +1,46 @@
+#!/bin/bash
+
+# --- Minikube Installation Check (Instruction: Ensure minikube is installed) ---
+echo "--- 1. Checking for Minikube installation... ---"
+if ! command -v minikube &> /dev/null
+then
+    echo "Error: minikube could not be found."
+    echo "Please install minikube (and kubectl) before running this script."
+    echo "You can follow the official documentation for your Linux distribution."
+    exit 1
+fi
+echo "Minikube is installed."
+
+# --- Start Kubernetes Cluster (Instruction: Starts a Kubernetes cluster) ---
+echo -e "\n--- 2. Starting Minikube Kubernetes cluster... ---"
+# The 'minikube start' command handles the cluster creation and startup.
+minikube start --driver=docker # Using the docker driver is common for Linux setups
+
+# Check if the cluster started successfully
+if [ $? -ne 0 ]; then
+    echo "Error: Minikube cluster failed to start."
+    exit 1
+fi
+
+# --- Verify Cluster Status (Instruction: verifies that the cluster is running) ---
+echo -e "\n--- 3. Verifying cluster status using 'kubectl cluster-info'... ---"
+# kubectl cluster-info retrieves the cluster endpoint information.
+kubectl cluster-info
+
+# --- Retrieve Available Pods (Instruction: Retrieves the available pods) ---
+echo -e "\n--- 4. Retrieving initial system pods using 'kubectl get pods'... ---"
+# We use the -A (all-namespaces) flag to see the pods that make up the K8s control plane,
+# which are often in the 'kube-system' namespace.
+kubectl get pods -A
+
+echo -e "\n--- Cluster Setup Complete! ---"
+echo "You can now interact with your local Kubernetes cluster using 'kubectl'."
+echo "To stop the cluster later, run: 'minikube stop'"
+
+
+nano kurbeScript
+
+chmod +x kurbeScript
+
+./kurbeScript
 
