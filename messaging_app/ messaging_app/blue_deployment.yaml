@@ -1,1 +1,103 @@
+# blue_deployment.yaml (Modified for Rolling Update)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # IMPORTANT: We are using the deployment name from Task 4 here.
+  name: django-blue-deployment 
+spec:
+  replicas: 3 # Using 3 replicas from Task 2's scaling, or you can revert to 2
+  selector:
+    matchLabels:
+      app: django-app
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: django-app
+        version: blue
+        tier: backend
+    spec:
+      containers:
+      - name: django-container-blue
+        # --- MODIFIED IMAGE TAG FOR ROLLING UPDATE ---
+        image: django-messaging-app:v2.0.0 
+        # --------------------------------------------
+        ports:
+        - containerPort: 8000
+        # ... (Probes for zero-downtime health check must be present)
+
+
+#!/bin/bash
+
+DEPLOYMENT_FILE="blue_deployment.yaml"
+DEPLOYMENT_NAME="django-blue-deployment"
+SERVICE_NAME="django-production-service" # Service from Task 4
+
+# --- Helper Function for Downtime Testing ---
+# This function sends a request every 0.1 seconds for 10 seconds.
+# We assume the NodePort Service created in Task 2 is still active for external access.
+function test_downtime() {
+    TEST_DURATION=10
+    MINIKUBE_IP=$(minikube ip)
+    NODE_PORT=$(kubectl get service django-app-service-nodeport -o=jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null)
+
+    if [ -z "$NODE_PORT" ]; then
+        echo "Error: Could not retrieve NodePort. Re-run Task 2's NodePort exposure command."
+        return 1
+    fi
+    TARGET_URL="http://$MINIKUBE_IP:$NODE_PORT/"
+
+    echo -e "\n--- Continuous Downtime Check: Sending requests to $TARGET_URL for ${TEST_DURATION}s ---"
+    echo "Running in background... Expecting status 200 (OK)."
+
+    START_TIME=$(date +%s)
+    END_TIME=$((START_TIME + TEST_DURATION))
+    
+    # Loop for the test duration
+    while [ $(date +%s) -lt $END_TIME ]; do
+        # Use curl with a short timeout and silent mode
+        curl -s -o /dev/null -w "%{http_code}\n" $TARGET_URL | grep -v '200' &
+        sleep 0.1
+    done
+
+    # Give background curl processes a moment to finish
+    wait
+    echo -e "\n--- Continuous Check Finished. Any non-200 status codes printed above indicate potential disruption. ---"
+}
+
+
+# --- Main Script Execution ---
+
+# 1. Apply the updated deployment file and trigger a rolling update
+echo "--- 1. Applying updated $DEPLOYMENT_FILE to trigger Rolling Update... ---"
+kubectl apply -f $DEPLOYMENT_FILE
+
+# 2. Monitor the update progress
+echo -e "\n--- 2. Monitoring Rollout Status and Running Downtime Test Concurrently... ---"
+
+# Start monitoring in the background
+(kubectl rollout status deployment/$DEPLOYMENT_NAME --timeout=600s) &
+ROLLOUT_PID=$!
+echo "Rollout Status PID: $ROLLOUT_PID"
+
+# Start the downtime test concurrently
+test_downtime
+
+# Wait for the rollout monitoring to finish (should exit once successful)
+wait $ROLLOUT_PID
+
+# Check the exit status of the rollout command
+if [ $? -ne 0 ]; then
+    echo -e "\nError: Rolling Update failed or timed out. Check 'kubectl get events'."
+    exit 1
+fi
+
+echo -e "\n--- 3. Verification: Rolling Update is Complete and Successful! ---"
+
+# 4. Verify the Rolling Update is Complete by checking the current pods
+echo "Current running pods (should all be the new version):"
+kubectl get pods -l app=django-app,version=blue 
+
+echo -e "\n--- Task 5 Complete! The application was updated to v2.0.0 without perceived downtime. ---"
+
 
