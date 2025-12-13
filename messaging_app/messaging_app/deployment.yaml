@@ -1,1 +1,105 @@
+# deployment.yaml
+# This file defines both the Deployment (how the app runs) and the Service (how it's accessed).
+
+# --- 1. Deployment Resource (Defines the Pods and manages their lifecycle) ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-app-deployment
+  labels:
+    app: django-app # Primary label for selection
+    tier: backend
+spec:
+  replicas: 2 # Ensures high availability with 2 running instances
+  selector:
+    matchLabels:
+      app: django-app
+  template:
+    metadata:
+      labels:
+        app: django-app
+        tier: backend
+    spec:
+      containers:
+      - name: django-container
+        # ------------------------------------------------------------------
+        # !! IMPORTANT: REPLACE with your actual Docker image name !!
+        image: django-messaging-app:latest 
+        # ------------------------------------------------------------------
+        ports:
+        - containerPort: 8000 # Standard Django development server port
+        
+        # Best Practice: Define Probes for self-healing (as covered in the overview)
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 15
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          timeoutSeconds: 3
+
+---
+
+# --- 2. Service Resource (Exposes the Deployment internally) ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-app-service
+spec:
+  # Instruction: Use ClusterIP (internal service, accessible only from within the cluster)
+  type: ClusterIP 
+  selector:
+    app: django-app # Selects all Pods with the label 'app: django-app'
+  ports:
+  - name: http
+    port: 80 # The port the Service itself will listen on
+    targetPort: 8000 # The port the Pod container (Django app) is listening on
+    protocol: TCP
+
+
+
+    ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-messaging-service
+spec:
+  type: ClusterIP
+  selector:
+    app: django-messaging
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+
+# Apply the Deployment and Service definition
+kubectl apply -f deployment.yaml
+
+# Expected Output:
+# deployment.apps/django-app-deployment created
+# service/django-app-service created
+
+kubectl get pods
+
+django-messaging-app-xxxxx   1/1   Running
+
+kubectl logs <pod-name>
+
+kubectl logs django-messaging-app-7c9d8f7d5c-abcde
+
+# Check the deployment status
+kubectl get deployment django-app-deployment
+
+# Check the service status
+kubectl get service django-app-service
+
+
+kubectl get services
+
+django-messaging-service   ClusterIP   <internal-ip>
 
