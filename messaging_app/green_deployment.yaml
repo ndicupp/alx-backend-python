@@ -1,1 +1,129 @@
+mv deployment.yaml blue_deployment.yaml
+
+# blue_deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-blue-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: django-app
+      version: blue # Key label for Blue-Green identification
+  template:
+    metadata:
+      labels:
+        app: django-app
+        version: blue
+        tier: backend
+    spec:
+      containers:
+      - name: django-container-blue
+        # Replace with your OLD image version
+        image: django-messaging-app:v1.0.0 
+        ports:
+        - containerPort: 8000
+        # ... (Include Liveness/Readiness Probes from Task 1)
+
+
+# green_deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-green-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: django-app
+      version: green # Key label for Blue-Green identification
+  template:
+    metadata:
+      labels:
+        app: django-app
+        version: green
+        tier: backend
+    spec:
+      containers:
+      - name: django-container-green
+        # Replace with your NEW image version
+        image: django-messaging-app:v2.0.0 
+        ports:
+        - containerPort: 8000
+        # ... (Include Liveness/Readiness Probes from Task 1)
+
+
+# kubeservice.yaml
+# This Service is the permanent entry point for the application.
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-production-service
+  labels:
+    app: django-app-production
+spec:
+  # Crucial: Initially, the service routes traffic to the BLUE version (v1.0.0)
+  selector:
+    app: django-app
+    version: blue # The Service currently targets Pods with the 'version: blue' label
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+
+
+
+#!/bin/bash
+
+BLUE_DEPLOYMENT="django-blue-deployment"
+GREEN_DEPLOYMENT="django-green-deployment"
+PROD_SERVICE="django-production-service"
+
+# --- 1. Deploy the BLUE (Current) Version and the Service ---
+echo "--- 1. Applying Blue Deployment (v1.0.0) and Production Service... ---"
+kubectl apply -f blue_deployment.yaml
+kubectl apply -f kubeservice.yaml
+
+# Wait for the blue version to be ready
+echo "Waiting for blue pods to be ready..."
+kubectl wait --for=condition=Available deployment/$BLUE_DEPLOYMENT --timeout=120s
+
+echo -e "\n--- Blue Deployment (v1.0.0) is LIVE. Traffic is routed to 'version: blue'. ---"
+kubectl get pods -l version=blue
+
+# --- 2. Deploy the GREEN (New) Version ---
+echo -e "\n--- 2. Applying Green Deployment (v2.0.0) for testing... ---"
+kubectl apply -f green_deployment.yaml
+
+# Wait for the green version to be ready
+echo "Waiting for green pods to be ready..."
+kubectl wait --for=condition=Available deployment/$GREEN_DEPLOYMENT --timeout=120s
+
+# --- 3. Check Logs of the New (Green) Version ---
+echo -e "\n--- 3. Checking logs of a new Green pod for errors (v2.0.0)... ---"
+# Find one running green pod
+GREEN_POD_NAME=$(kubectl get pods -l version=green -o jsonpath='{.items[0].metadata.name}')
+if [ -z "$GREEN_POD_NAME" ]; then
+    echo "Error: Could not find a running Green pod."
+    exit 1
+fi
+# Instruction: uses kubectl logs to check for errors in the new version
+kubectl logs $GREEN_POD_NAME | tail -n 10
+
+echo -e "\n--- 4. Verification and Traffic Switch Readiness ---"
+echo "Both Blue (v1.0.0) and Green (v2.0.0) are running concurrently."
+echo "The Production Service '$PROD_SERVICE' is still routing traffic to Blue (v1.0.0)."
+echo "Perform external tests on Green pods if needed, then execute the switch."
+
+# --- TRAFFIC SWITCH COMMAND (Manual Step for Blue-Green) ---
+echo -e "\n--- MANUAL STEP: To switch traffic to the Green version (zero-downtime):"
+echo "kubectl patch service $PROD_SERVICE -p '{\"spec\":{\"selector\":{\"version\":\"green\"}}}'"
+echo "To switch back (Rollback):"
+echo "kubectl patch service $PROD_SERVICE -p '{\"spec\":{\"selector\":{\"version\":\"blue\"}}}'"
+echo -e "\n--- Task 4 Complete. ---"
+
+
 
