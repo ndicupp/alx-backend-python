@@ -84,4 +84,45 @@ git add .github/workflows/ci.yml
 git commit -m "Add GitHub Actions CI workflow for Django tests"
 git push origin main
 
+github/workflows/ci.yml
+
+- name: Run Linting (flake8)
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        # exit-zero treats all errors as warnings (we want to fail, so we don't use it for errors)
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run Tests with Coverage
+      env:
+        DB_ENGINE: django.db.backends.mysql
+        DB_NAME: messaging_db_test
+        DB_USER: root
+        DB_PASSWORD: root_password
+        DB_HOST: 127.0.0.1
+        DB_PORT: 3306
+      run: |
+        # Run tests and generate an HTML coverage report
+        pytest --cov=. --cov-report=html
+
+    - name: Upload Coverage Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-coverage-report
+        path: htmlcov/
+
+
+flake8
+
+--cov=.
+
+upload-artifact
+
+git commit -am "Add linting and coverage to CI"
+git push
+
+code-coverage-report
+index.html
+
 
