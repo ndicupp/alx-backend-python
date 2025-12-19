@@ -66,3 +66,99 @@ https://github.com/YOUR_USERNAME/YOUR_REPO.git
 Jenkinsfile
 
 
+docker stop jenkins
+docker rm jenkins
+
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  jenkins/jenkins:lts
+
+Manage Jenkins → Credentials → System → Global → Add Credentials
+
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_HUB_USER = 'your-dockerhub-username'
+        IMAGE_NAME = 'messaging-app'
+        IMAGE_TAG = "${env.BUILD_NUMBER}" // Uses the Jenkins build number as the version
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/YOUR_USERNAME/YOUR_REPO.git', 
+                    credentialsId: 'github-auth', 
+                    branch: 'main'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                // We keep the tests to ensure we don't build a broken image
+                sh 'python3 -m venv venv'
+                sh './venv/bin/pip install -r requirements.txt'
+                sh './venv/bin/pytest --junitxml=reports/result.xml'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    // This builds the image using the Dockerfile in your repo
+                    dockerImage = docker.build("${DOCKER_HUB_USER}/${IMAGE_NAME}:${IMAGE_TAG}")
+                }
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                script {
+                    // Uses the credentials we stored in Step 2
+                    docker.withRegistry('', 'docker-hub-creds') {
+                        dockerImage.push()
+                        dockerImage.push("latest") // Also tag as latest
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            junit 'reports/result.xml'
+            // Clean up local images to save disk space on the Jenkins server
+            sh "docker rmi ${DOCKER_HUB_USER}/${IMAGE_NAME}:${IMAGE_TAG} || true"
+        }
+    }
+}
+
+docker build -t yourdockerhubusername/django-messaging-app:latest .
+
+  docker login
+docker push
+
+git add Jenkinsfile
+git commit -m "Add Docker build and push stages to Jenkins pipeline"
+git push origin main
+
+https://hub.docker.com/
+
+  
+
