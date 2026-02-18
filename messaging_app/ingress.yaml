@@ -1,1 +1,65 @@
+# Enable the Ingress addon in Minikube
+minikube addons enable ingress
+
+kubectl get pods -n ingress-nginx
+
+# ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: django-ingress
+  annotations:
+    # Annotation required by many Ingress controllers for path-based routing
+    nginx.ingress.kubernetes.io/rewrite-target: / 
+spec:
+  rules:
+  - host: my-django-app.local # Use a descriptive domain name for local testing
+    http:
+      paths:
+      # Rule 1: Route traffic from the root path (/)
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: django-app-service # Name of the Service created in Task 1
+            port:
+              number: 80 # The port the Service exposes (not the container port)
+      
+      # Rule 2: Route traffic from /api/
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: django-app-service
+            port:
+              number: 80
+
+
+kubectl apply -f ingress.yaml
+
+host: django.local
+
+path: /api
+
+http://django.local/api
+
+# commands.txt
+# Command used to apply the Ingress configuration:
+kubectl apply -f ingress.yaml
+
+minikube ip
+
+192.168.49.2
+
+sudo nano /etc/hosts
+
+192.168.49.2   django.local
+
+kubectl get ingress django-ingress
+
+curl http://django.local/api
+
+http://django.local/api
+
+
 
